@@ -1,0 +1,25 @@
+# secrets
+schwab_config.json
+schwab_config_*.json
+!schwab_config.example.json
+tokens.json
+tokens_*.json
+*.tmp
+# Schwab data and status written by the feed
+latest.json
+feed_status.json
+stream_status.json
+tape.json
+tape_state.json
+depth.json
+refresh.request
+stop.request
+# personal notes and per-day output
+gm/0dte-charts.md
+gm/run_*.json
+gm/close_*.json
+gm/summary.json
+gm/gamma-map-*.html
+# Python cache
+__pycache__/
+*.pyc

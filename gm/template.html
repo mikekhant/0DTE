@@ -1,0 +1,244 @@
+<title>0DTE Gamma Map __DATELABEL__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one trading day on one page. Header with snapshot switcher, then QQQ and SPY in two equal columns: call, tiles, session candles with dealer levels, GEX by strike, levels list. Data lives in #gm-data so each /0dte run swaps it in place. */
+:root{
+  --bg:#F5F6F4; --panel:#FFFFFF; --ink:#1B2430; --muted:#5F6B78; --line:#D8DEE4; --grid:#ECEFF2; --chip:#EEF1F4;
+  --up:#1E8A5A; --down:#C23B3B;
+  --cw:#C2410C; --pw:#1F6FD0; --mp:#7C3AED; --vwap:#0F8A6E; --flip:#5F6B78; --ref:#9AA4AE;
+  --f-sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12161B; --panel:#1A1F26; --ink:#E6EAEE; --muted:#9AA6B2; --line:#2B333C; --grid:#232A32; --chip:#232A32;
+  --up:#3DBF8A; --down:#E36B6B; --cw:#D9743F; --pw:#4A8ADB; --mp:#9468E8; --vwap:#2A9F82; --flip:#9AA6B2; --ref:#6B7682; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161B; --panel:#1A1F26; --ink:#E6EAEE; --muted:#9AA6B2; --line:#2B333C; --grid:#232A32; --chip:#232A32;
+  --up:#3DBF8A; --down:#E36B6B; --cw:#D9743F; --pw:#4A8ADB; --mp:#9468E8; --vwap:#2A9F82; --flip:#9AA6B2; --ref:#6B7682; color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:15px;line-height:1.5;
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1360px;margin:0 auto}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
+h1{font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.snaps{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.snaps .lbl{font-size:12px;color:var(--muted);margin-right:4px}
+.snaps button{font:500 13px var(--f-mono);padding:5px 10px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--muted);cursor:pointer}
+.snaps button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.snaps button:focus-visible{outline:2px solid var(--pw);outline-offset:2px}
+.strip{display:flex;flex-wrap:wrap;gap:8px 20px;margin:14px 0 16px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:6px;font-size:13px}
+.strip b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
+.strip span{color:var(--muted)}
+.strip .ev{flex:1 1 360px;min-width:0}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+@media (max-width:1000px){.cols{grid-template-columns:1fr}}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;min-width:0;position:relative}
+.col h2{font-size:20px;font-weight:600;margin:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.col h2 .px{font-family:var(--f-mono);font-size:18px;font-weight:500}
+.col h2 .chg{font-family:var(--f-mono);font-size:13px}
+.pill{display:inline-block;font:600 11px var(--f-sans);letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:3px;background:var(--chip);color:var(--ink)}
+.pill.neg::before{content:"▼ ";color:var(--down)}
+.pill.pos::before{content:"▲ ";color:var(--up)}
+.call{margin:6px 0 10px;font-size:14px}
+.call .note{color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+@media (max-width:520px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{border:1px solid var(--line);border-radius:4px;padding:7px 9px;min-width:0}
+.tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .v{font-family:var(--f-mono);font-size:16px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tile .d{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ptitle{font-size:12px;font-weight:600;letter-spacing:.03em;margin:10px 0 0;color:var(--ink)}
+.pnote{font-size:11.5px;color:var(--muted);margin:0}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--muted);margin:6px 0 0}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:16px;border-top:2px solid}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px;font:12px var(--f-mono);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.14);white-space:nowrap;z-index:3}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:10px}
+td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap;width:1%}
+td.k{white-space:nowrap;width:1%;font-weight:500}
+td .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll svg{min-width:560px}
+@media (max-width:560px){td.d{display:none}}
+.empty{padding:28px 10px;text-align:center;color:var(--muted);font-size:13px;border:1px dashed var(--line);border-radius:4px;margin-top:8px}
+.foot{font-size:12px;color:var(--muted);margin-top:16px;max-width:90ch}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1 id="h1">0DTE Gamma Map</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+    <div class="snaps" id="snaps" role="group" aria-label="Snapshot time"></div>
+  </div>
+  <div class="strip" id="strip"></div>
+  <div class="cols" id="cols"></div>
+  <p class="foot">Levels come from Cboe delayed quotes (15 minutes late) using last night's open interest, so contracts opened today are not in the gamma numbers. The gamma sign assumes dealers are long calls and short puts. Candles are Yahoo Finance 1-minute bars grouped into 5 minutes. Picking an earlier snapshot shows the levels as they stood then and greys out the bars that came after. Not financial advice.</p>
+</div>
+
+<script id="gm-data" type="application/json">__DATA__</script>
+<script>
+const D=JSON.parse(document.getElementById("gm-data").textContent);
+const SYMS=Object.keys(D.tickers);
+const NS="http://www.w3.org/2000/svg";
+const el=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+const tx=(p,x,y,s,a={})=>{const t=el("text",Object.assign({x,y},a),p);t.textContent=s;return t};
+const hm=m=>Math.floor(m/60)+":"+String(m%60).padStart(2,"0");
+const toM=s=>{const[a,b]=s.split(":").map(Number);return a*60+b};
+const f2=v=>(v==null||isNaN(v))?"–":(+v).toFixed(2);
+const pct=(a,b)=>((a/b-1)*100);
+const sgn=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(2);
+const bn=v=>(v>=0?"+":"−")+"$"+(Math.abs(v)/1000).toFixed(1)+"B";
+let cur=D.snapshots.length-1;
+try{const s=localStorage.getItem("gm-snap-"+D.date);if(s!==null&&+s<D.snapshots.length)cur=+s}catch(e){}
+
+function header(){
+  const s=D.snapshots[cur];
+  document.getElementById("h1").textContent="0DTE Gamma Map · "+D.dateLabel;
+  document.getElementById("sub").textContent=`${D.weekday} · expiry ${D.date} · ${D.snapshots.length} update${D.snapshots.length>1?"s":""}, last at ${D.snapshots.at(-1).t} ET · bars through ${D.barsThrough||"–"} ET`;
+  const box=document.getElementById("snaps");box.innerHTML='<span class="lbl">Levels as of (ET)</span>';
+  D.snapshots.forEach((x,i)=>{const b=document.createElement("button");b.type="button";b.id="snap-"+i;b.textContent=x.t;b.setAttribute("aria-pressed",i===cur);b.onclick=()=>{cur=i;try{localStorage.setItem("gm-snap-"+D.date,i)}catch(e){};render()};box.appendChild(b)});
+  const v=s.vol||{};
+  const ev=(D.events||[]).map(e=>`<span>${e[0]}</span> ${e[1]}`).join(" · ");
+  document.getElementById("strip").innerHTML=
+   `<div>VIX1D <b>${f2(v.VIX1D)}</b></div><div>VIX <b>${f2(v.VIX)}</b></div><div>VXN <b>${f2(v.VXN)}</b></div>`+
+   (ev?`<div class="ev">${ev}</div>`:"");
+}
+
+function column(sym){
+  const T=D.tickers[sym],S=D.snapshots[cur][sym],snapM=toM(D.snapshots[cur].t);
+  const bars=T.bars||[];const last=bars.length?bars.at(-1)[4]:S.spot;
+  const reg=S.spot>S.flip?"pos":"neg";const dist=pct(S.spot,S.flip);
+  const pin=(S.mp===S.cw0&&S.mp===S.pw0)?`Pin at ${S.mp}: max pain and both 0DTE walls.`:`Max pain ${S.mp}; 0DTE walls ${S.cw0} / ${S.pw0}.`;
+  const col=document.createElement("section");col.className="col";col.setAttribute("aria-label",sym);
+  const chg=pct(last,T.prevClose);
+  col.innerHTML=`<h2>${sym} <span class="px">${f2(last)}</span><span class="chg" style="color:var(${chg>=0?"--up":"--down"})">${chg>=0?"+":""}${chg.toFixed(2)}%</span><span class="pill ${reg}">${reg==="pos"?"Positive gamma":"Negative gamma"}</span></h2>
+  <p class="call">${Math.abs(dist).toFixed(1)}% ${dist<0?"below":"above"} the ${f2(S.flip)} flip. ${pin}${S.note?` <span class="note">${S.note}</span>`:""}</p>
+  <div class="tiles">
+   <div class="tile"><div class="k">Spot at ${D.snapshots[cur].t}</div><div class="v">${f2(S.spot)}</div><div class="d">VWAP ${f2(S.vwap)}</div></div>
+   <div class="tile"><div class="k">Net GEX all / 0DTE</div><div class="v">${bn(S.gexAll)}</div><div class="d">0DTE ${bn(S.gex0)} per 1%</div></div>
+   <div class="tile"><div class="k">Call / put wall</div><div class="v">${S.cw} / ${S.pw}</div><div class="d">0DTE ${S.cw0} / ${S.pw0}</div></div>
+   <div class="tile"><div class="k">Implied move left</div><div class="v">±${f2(S.straddle)}</div><div class="d">${S.em.toFixed(2)}% · ${f2(S.spot-S.straddle)}–${f2(S.spot+S.straddle)}</div></div>
+  </div>`;
+  if(bars.length){
+    col.insertAdjacentHTML("beforeend",`<p class="ptitle">Session, 5-minute bars</p>`);
+    priceChart(col,sym,T,S,bars,snapM);
+    col.insertAdjacentHTML("beforeend",`<div class="legend"><span><i class="sw" style="border-color:var(--vwap)"></i>VWAP</span><span><i class="sw" style="border-color:var(--cw)"></i>Call wall</span><span><i class="sw" style="border-color:var(--pw)"></i>Put wall</span><span><i class="sw" style="border-color:var(--mp);border-top-style:dashed"></i>Max pain</span><span><i class="sw" style="border-color:var(--ref);border-top-style:dotted"></i>Reference</span></div>`);
+  } else {
+    col.insertAdjacentHTML("beforeend",`<div class="empty">The session hasn't opened yet. Candles appear on the first update after 9:30 ET; the levels below are set against Friday's close of ${f2(T.prevClose)}.</div>`);
+  }
+  col.insertAdjacentHTML("beforeend",`<p class="ptitle">Net dealer gamma by strike</p><p class="pnote">$ millions of hedging per 1% move, all expiries. Green: dealers buy dips. Red: dealers sell into drops.</p>`);
+  gexChart(col,sym,T,S,bars);
+  ladder(col,T,S,bars);
+  return col;
+}
+
+function levels(T,S,bars){
+  const hi=bars.length?Math.max(...bars.map(b=>b[2])):null,lo=bars.length?Math.min(...bars.map(b=>b[3])):null;
+  const L=[
+   {y:S.flip,c:"--flip",d:"6 4",n:"Flip",w:1.4},
+   {y:S.cw,c:"--cw",d:"",n:"Call wall",w:1.6},
+   {y:S.cw0,c:"--cw",d:"3 3",n:"0DTE call wall",w:1.2,skip:S.cw0===S.cw||S.cw0===S.mp},
+   {y:S.vwap,c:"--vwap",d:"",n:"VWAP",w:1.6,noline:true},
+   {y:S.mp,c:"--mp",d:"6 4",n:S.mp===S.cw0&&S.mp===S.pw0?"Max pain · 0DTE walls":"Max pain",w:1.6},
+   {y:S.pw0,c:"--pw",d:"3 3",n:"0DTE put wall",w:1.2,skip:S.pw0===S.pw||S.pw0===S.mp},
+   {y:S.pw,c:"--pw",d:"",n:"Put wall",w:1.6},
+   {y:hi,c:"--ref",d:"2 3",n:"HOD"},{y:lo,c:"--ref",d:"2 3",n:"LOD",skip:lo===T.orl},
+   {y:T.orh,c:"--ref",d:"2 3",n:"OR high"},{y:T.orl,c:"--ref",d:"2 3",n:lo===T.orl?"LOD · OR low":"OR low"},
+   {y:T.open,c:"--ref",d:"2 3",n:"Open"},{y:T.prevClose,c:"--ref",d:"2 3",n:"Prior close"}];
+  return L.filter(l=>l.y!=null&&!l.skip);
+}
+
+function tipAt(col,e,html){let t=col.querySelector(".tip");if(!t){t=document.createElement("div");t.className="tip";col.appendChild(t)}
+  t.hidden=false;t.innerHTML=html;const r=col.getBoundingClientRect();let x=e.clientX-r.left+14,y=e.clientY-r.top-10;if(x+170>r.width)x-=190;t.style.left=x+"px";t.style.top=y+"px"}
+function tipOff(col){const t=col.querySelector(".tip");if(t)t.hidden=true}
+
+function priceChart(col,sym,T,S,bars,snapM){
+  const W=640,H=340,ML=6,MR=146,MT=18,MB=26;
+  const SH={"Max pain · 0DTE walls":"Max pain/0DTE","LOD · OR low":"LOD/OR low","0DTE put wall":"0DTE put","0DTE call wall":"0DTE call"};const nm=n=>SH[n]||n;
+  const sc=document.createElement("div");sc.className="scroll";col.appendChild(sc);
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":`${sym} session candles with dealer levels`},sc);
+  const L=levels(T,S,bars);
+  let lo=Math.min(...bars.map(b=>b[3])),hi=Math.max(...bars.map(b=>b[2]));
+  const near=S.spot*0.006;
+  L.forEach(l=>{if(Math.abs(l.y-S.spot)<=near){lo=Math.min(lo,l.y);hi=Math.max(hi,l.y)}});
+  const pad=(hi-lo)*0.05;lo-=pad;hi+=pad;
+  const N=78;const X=i=>ML+(i+0.5)*(W-ML-MR)/N,Y=v=>MT+(hi-v)/(hi-lo)*(H-MT-MB);
+  const idx=m=>Math.round((m-570)/5);
+  const g=el("g",{},svg);
+  const step=(hi-lo)>12?2:(hi-lo)>5?1:0.5;
+  for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step)el("line",{x1:ML,x2:W-MR,y1:Y(v),y2:Y(v),stroke:"var(--grid)"},g);
+  for(let m=600;m<=930;m+=60){const x=X(idx(m));el("line",{x1:x,x2:x,y1:H-MB,y2:H-MB+4,stroke:"var(--line)"},g);tx(g,x,H-MB+16,hm(m),{"text-anchor":"middle"})}
+  const inR=L.filter(l=>l.y>=lo&&l.y<=hi),outR=L.filter(l=>l.y<lo||l.y>hi);
+  inR.forEach(l=>{if(!l.noline)el("line",{x1:ML,x2:W-MR,y1:Y(l.y),y2:Y(l.y),stroke:`var(${l.c})`,"stroke-width":l.w||1,"stroke-dasharray":l.d},g)});
+  el("polyline",{points:bars.map(b=>X(idx(b[0]))+","+Y(b[5])).join(" "),fill:"none",stroke:"var(--vwap)","stroke-width":2},g);
+  const cw=Math.max(2.5,(W-ML-MR)/N*0.62);
+  bars.forEach(b=>{const[m,o,h,l,c]=b,i=idx(m),after=m>snapM,colr=c>=o?"var(--up)":"var(--down)";const gg=el("g",{opacity:after?0.28:1},g);
+   el("line",{x1:X(i),x2:X(i),y1:Y(h),y2:Y(l),stroke:colr},gg);el("rect",{x:X(i)-cw/2,y:Y(Math.max(o,c)),width:cw,height:Math.max(1.2,Math.abs(Y(o)-Y(c))),fill:colr,rx:1},gg)});
+  if(snapM<bars.at(-1)[0]){const x=X(idx(snapM))+cw;el("line",{x1:x,x2:x,y1:MT,y2:H-MB,stroke:"var(--muted)","stroke-dasharray":"3 3"},g);tx(g,x+4,MT+10,`levels as of ${hm(snapM)}`,{})}
+  const lb=bars.at(-1);el("circle",{cx:X(idx(lb[0])),cy:Y(lb[4]),r:3.5,fill:"var(--ink)",stroke:"var(--panel)","stroke-width":1.5},g);
+  // right labels
+  // off-chart levels stack at the top/bottom of the right gutter with an arrow
+  const above=outR.filter(l=>l.y>hi).sort((a,b)=>b.y-a.y),below=outR.filter(l=>l.y<lo).sort((a,b)=>b.y-a.y);
+  const LH=12,top0=MT+2,bot0=H-MB+8;
+  above.forEach((l,i)=>{const y=top0+i*LH;el("path",{d:`M${W-MR+6} ${y+1} l3 -6 l3 6`,stroke:`var(${l.c})`,"stroke-width":1.4,fill:"none"},g);tx(g,W-MR+14,y+2,`${nm(l.n)} ${f2(l.y)}`,{fill:`var(${l.c})`,"font-weight":"500"})});
+  below.forEach((l,i)=>{const y=bot0-(below.length-1-i)*LH;el("path",{d:`M${W-MR+6} ${y-5} l3 6 l3 -6`,stroke:`var(${l.c})`,"stroke-width":1.4,fill:"none"},g);tx(g,W-MR+14,y+2,`${nm(l.n)} ${f2(l.y)}`,{fill:`var(${l.c})`,"font-weight":"500"})});
+  const minY=top0+above.length*LH+2,maxY=bot0-below.length*LH-2;
+  const labs=inR.map(l=>({y:Math.max(minY,Y(l.y)+4),l})).sort((a,b)=>a.y-b.y);
+  for(let i=1;i<labs.length;i++)if(labs[i].y-labs[i-1].y<LH)labs[i].y=labs[i-1].y+LH;
+  if(labs.length&&labs.at(-1).y>maxY){labs.at(-1).y=maxY;for(let i=labs.length-2;i>=0;i--)if(labs[i+1].y-labs[i].y<LH)labs[i].y=labs[i+1].y-LH}
+  labs.forEach(({y,l})=>{const ly=Y(l.y);if(Math.abs(y-4-ly)>3)el("line",{x1:W-MR,x2:W-MR+4,y1:ly,y2:y-4,stroke:`var(${l.c})`,"stroke-width":.8},g);tx(g,W-MR+6,y,`${nm(l.n)} ${f2(l.y)}`,{fill:`var(${l.c})`,"font-weight":"500"})});
+  const hl=el("rect",{x:0,y:MT,width:cw+6,height:H-MT-MB,fill:"var(--ink)",opacity:0},g);
+  const hit=el("rect",{x:ML,y:MT,width:W-ML-MR,height:H-MT-MB,fill:"transparent"},svg);
+  hit.addEventListener("mousemove",e=>{const r=svg.getBoundingClientRect(),px=(e.clientX-r.left)*W/r.width;const i=Math.round((px-ML)/((W-ML-MR)/N)-0.5);const b=bars.find(z=>idx(z[0])===i);if(!b){tipOff(col);hl.setAttribute("opacity",0);return}
+   hl.setAttribute("x",X(i)-cw/2-3);hl.setAttribute("opacity",.06);tipAt(col,e,`<b>${sym} ${hm(b[0])} ET</b><br>O ${f2(b[1])} H ${f2(b[2])}<br>L ${f2(b[3])} C ${f2(b[4])}<br>VWAP ${f2(b[5])}`)});
+  hit.addEventListener("mouseleave",()=>{tipOff(col);hl.setAttribute("opacity",0)});
+}
+
+function gexChart(col,sym,T,S,bars){
+  const W=640,H=250,ML=50,MR=96,MT=12,MB=24;
+  const sc=document.createElement("div");sc.className="scroll";col.appendChild(sc);
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":`${sym} net dealer gamma by strike`},sc);
+  const st=(S.strikes||[]).slice().sort((a,b)=>a[0]-b[0]);
+  const lo=Math.min(S.spot*0.96,...st.map(s=>s[0]))-1,hi=Math.max(S.spot*1.04,S.flip+1,...st.map(s=>s[0]))+1;
+  const Y=v=>MT+(hi-v)/(hi-lo)*(H-MT-MB);
+  const mx=Math.max(500,...st.map(s=>Math.abs(s[1])))*1.15;const X=v=>ML+(v+mx)/(2*mx)*(W-ML-MR);
+  const g=el("g",{},svg);
+  if(bars.length){const bh=Math.max(...bars.map(b=>b[2])),bl=Math.min(...bars.map(b=>b[3]));el("rect",{x:ML,y:Y(bh),width:W-ML-MR,height:Math.max(2,Y(bl)-Y(bh)),fill:"var(--ink)",opacity:.06},g)}
+  const step=hi-lo>60?20:10;for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step){el("line",{x1:ML,x2:W-MR,y1:Y(v),y2:Y(v),stroke:"var(--grid)"},g);tx(g,ML-6,Y(v)+4,v,{"text-anchor":"end"})}
+  const tk=mx>2000?1000:500;for(let v=-Math.floor(mx/tk)*tk;v<=mx;v+=tk){el("line",{x1:X(v),x2:X(v),y1:MT,y2:H-MB,stroke:v===0?"var(--line)":"var(--grid)","stroke-width":v===0?1.2:1},g);tx(g,X(v),H-MB+15,v===0?"0":(v>0?"+":"−")+(Math.abs(v)/1000).toFixed(1)+"B",{"text-anchor":"middle"})}
+  const lines=[{y:S.flip,c:"--flip",d:"6 4",n:"Flip"},{y:S.cw,c:"--cw",d:"",n:"Call wall"},{y:S.mp,c:"--mp",d:"6 4",n:"Max pain"},{y:S.pw,c:"--pw",d:"",n:"Put wall"}];
+  lines.forEach(l=>el("line",{x1:ML,x2:W-MR,y1:Y(l.y),y2:Y(l.y),stroke:`var(${l.c})`,"stroke-dasharray":l.d,"stroke-width":1.3},g));
+  const labs=lines.map(l=>({y:Y(l.y)+4,l})).sort((a,b)=>a.y-b.y);for(let i=1;i<labs.length;i++)if(labs[i].y-labs[i-1].y<12)labs[i].y=labs[i-1].y+12;
+  labs.forEach(({y,l})=>tx(g,W-MR+6,y,`${l.n} ${l.y}`,{fill:`var(${l.c})`,"font-weight":"500"}));
+  const bh=Math.max(4,Math.min(12,(H-MT-MB)/(hi-lo)*0.8*(st.length>1?Math.min(...st.slice(1).map((s,i)=>s[0]-st[i][0])):5)));
+  const drawn=[];st.slice().sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).forEach(([k,v])=>{const x0=X(Math.min(0,v)),x1=X(Math.max(0,v));
+   const r=el("rect",{x:x0,y:Y(k)-bh/2,width:Math.max(2,x1-x0),height:bh,fill:v>=0?"var(--up)":"var(--down)",rx:2},g);
+   r.addEventListener("mousemove",e=>tipAt(col,e,`<b>${sym} ${k}</b><br>${v>=0?"+":"−"}$${Math.abs(v).toLocaleString()}M per 1%`));r.addEventListener("mouseleave",()=>tipOff(col));
+   const ly=Y(k)+4;if(drawn.some(d=>Math.abs(d-ly)<11))return;drawn.push(ly);
+   const lab=(v>0?"+":"")+v,need=lab.length*6.7+6;
+   if(v<0&&x0-need<ML)tx(g,X(0)+4,ly,lab,{"text-anchor":"start","font-weight":"500",fill:"var(--ink)"});
+   else if(v>=0&&x1+need>W-MR)tx(g,X(0)-4,ly,lab,{"text-anchor":"end","font-weight":"500",fill:"var(--ink)"});
+   else tx(g,v>=0?x1+4:x0-4,ly,lab,{"text-anchor":v>=0?"start":"end"})});
+  el("path",{d:`M${ML-1} ${Y(S.spot)} l-7 -5 l0 10 z`,fill:"var(--ink)"},g);
+}
+
+function ladder(col,T,S,bars){
+  const L=levels(T,S,bars).sort((a,b)=>b.y-a.y);
+  const what={"Flip":"Above it dealers dampen moves; below it they amplify them.","Call wall":"Largest call gamma; resistance and upside pin.","0DTE call wall":"Largest call gamma expiring today.","VWAP":"Control line for intraday trend.","Max pain":"Strike where today's options pay out least.","Max pain · 0DTE walls":"Max pain and both 0DTE walls on one strike: the pin.","0DTE put wall":"Largest put gamma expiring today.","Put wall":"Largest put gamma; support, and an accelerant if it breaks.","HOD":"High of day.","LOD":"Low of day.","OR high":"Opening-range high, 9:30–9:45.","OR low":"Opening-range low.","LOD · OR low":"Low of day, set in the opening range.","Open":"Today's open.","Prior close":"Previous session's close."};
+  const t=document.createElement("table");
+  t.innerHTML=L.map(l=>`<tr><td class="k"><span class="dot" style="background:var(${l.c})"></span>${l.n}</td><td class="n">${f2(l.y)}</td><td class="n">${sgn(pct(l.y,S.spot))}%</td><td class="d">${what[l.n]||""}</td></tr>`).join("");
+  col.appendChild(t);
+}
+
+function render(){header();const c=document.getElementById("cols");c.replaceChildren(...SYMS.map(column))}
+render();
+</script>
